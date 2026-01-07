@@ -1,0 +1,10 @@
+scrapy>=2.11.0
+scrapy-redis>=0.7.3
+curl-cffi>=0.5.10
+google-cloud-storage>=2.10.0
+google-cloud-bigquery>=3.11.0
+python-dotenv>=1.0.0
+redis>=5.0.0
+itemloaders>=1.1.0
+requests>=2.31.0
+

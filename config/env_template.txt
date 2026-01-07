@@ -1,0 +1,92 @@
+# ============================================
+# REDIS CONFIGURATION (Required)
+# ============================================
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# ============================================
+# BRIGHT DATA WEB UNLOCKER - API ACCESS (Required)
+# ============================================
+# Site Unblocker uses API-based access (token + zone)
+# Get these from: https://brightdata.com/cp/zones
+# 1. Go to your zone: webscrape_amzn
+# 2. Click on "Direct API access" tab
+# 3. Copy your API Key (Bearer token)
+# 4. Your zone name is: webscrape_amzn
+#
+BRIGHT_DATA_API_TOKEN=eb2ca709644144656034d231530b20b5a27eff44306808843c78a12019fee95b
+BRIGHT_DATA_ZONE=webscrape_amzn
+BRIGHT_DATA_API_ENDPOINT=https://api.brightdata.com/request
+
+# Only needed if you want automatic failover to residential proxies
+# Your Residential Proxy credentials (from curl command):
+BRIGHT_DATA_RESIDENTIAL_USERNAME=brd-customer-hl_c2b71bb6-zone-webscraperamzn__proxy1
+BRIGHT_DATA_RESIDENTIAL_PASSWORD=89gz77iw6dtm
+BRIGHT_DATA_RESIDENTIAL_ENDPOINT=brd.superproxy.io:33335
+
+# Proxy selection: site_unblocker, residential, or auto
+# For Web Access Unblocker, use: site_unblocker
+BRIGHT_DATA_PROXY_TYPE=auto
+
+# ============================================
+# GOOGLE CLOUD (Optional - for data storage)
+# ============================================
+# These are used by the GCSRawHTMLPipeline and BigQueryAnalyticsPipeline
+# to store scraped data in Google Cloud Platform.
+#
+# SETUP INSTRUCTIONS:
+#
+# 1. CREATE GCP SERVICE ACCOUNT & DOWNLOAD KEY:
+#    - Go to: https://console.cloud.google.com/iam-admin/serviceaccounts
+#    - Click "Create Service Account"
+#    - Name it (e.g., "scrapy-retail-intelligence")
+#    - Click "Grant this service account access to project"
+#    - In the role selector dropdown, use the search box and type:
+#      * For GCS: Search "Storage" → Select "Storage Admin" (or "Storage Object Admin" for read/write only)
+#      * For BigQuery: Search "BigQuery" → Select "BigQuery Data Editor"
+#    - Click "Continue" then "Done"
+#    - Click on the newly created service account → "Keys" tab → "Add Key" → "Create new key" → JSON
+#    - Download the JSON file and save it securely (e.g., config/gcp-credentials.json)
+#    - Set GOOGLE_APPLICATION_CREDENTIALS to the full path of this JSON file
+#    - TIP: If you can't find roles during creation, you can assign them later:
+#      Go to IAM & Admin → IAM → Find your service account → Click edit → Add role
+#
+# 2. CREATE GCS BUCKET (for raw HTML storage):
+#    - Go to: https://console.cloud.google.com/storage/buckets
+#    - Click "Create Bucket"
+#    - Choose a unique name (e.g., "retail-intelligence-raw-html")
+#    - Select location and storage class
+#    - Set GCS_BUCKET_NAME to your bucket name
+#
+# 3. CREATE BIGQUERY DATASET & TABLE (for structured data):
+#    - Go to: https://console.cloud.google.com/bigquery
+#    - Click "Create Dataset"
+#    - Choose a dataset ID (e.g., "retail_intelligence")
+#    - Set BQ_DATASET to your dataset ID
+#    - The table will be auto-created by the pipeline, or create it manually
+#    - Set BQ_TABLE to your table name (e.g., "products")
+#
+# EXAMPLE VALUES:
+# GOOGLE_APPLICATION_CREDENTIALS=C:\Users\jonel\OneDrive\Desktop\Jonel_Projects\WebScrapeAMZN\config\gcp-credentials.json
+# GCS_BUCKET_NAME=retail-intelligence-raw-html
+# BQ_DATASET=retail_intelligence
+# BQ_TABLE=products
+#
+GOOGLE_APPLICATION_CREDENTIALS=C:\Users\jonel\OneDrive\Desktop\Jonel_Projects\WebScrapeAMZN\config\gcp-credentials.json
+GCS_BUCKET_NAME=retail-intelligence-raw-html
+BQ_DATASET=retail_intelligence
+BQ_TABLE=products
+
+# ============================================
+# RESILIENCE CONFIGURATION (Optional)
+# ============================================
+BACKOFF_BASE_DELAY=1
+BACKOFF_MAX_RETRIES=5
+BACKOFF_MAX_WAIT=300
+
+# ============================================
+# LOGGING (Optional)
+# ============================================
+LOG_LEVEL=INFO
+
