@@ -37,9 +37,9 @@ class AmazonSpider(scrapy.Spider):
                 'https://www.amazon.com/s?k=smartphone',
             ]
     
-    def start_requests(self):
-        """Generate initial requests"""
-        logger.info(f'start_requests() called with {len(self.start_urls)} URLs: {self.start_urls}')
+    async def start(self):
+        """Generate initial requests (async method for Scrapy 2.13+)"""
+        logger.info(f'start() called with {len(self.start_urls)} URLs: {self.start_urls}')
         for url in self.start_urls:
             logger.info(f'Yielding request for: {url}')
             yield scrapy.Request(

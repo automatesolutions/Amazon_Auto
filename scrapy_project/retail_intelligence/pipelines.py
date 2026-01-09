@@ -189,6 +189,10 @@ class BigQueryAnalyticsPipeline:
             bigquery.SchemaField('image_urls', 'STRING', mode='REPEATED'),
             bigquery.SchemaField('scraped_at', 'TIMESTAMP', mode='REQUIRED'),
             bigquery.SchemaField('gcs_path', 'STRING'),  # Reference to raw HTML in GCS
+            bigquery.SchemaField('brand', 'STRING'),  # Product brand
+            bigquery.SchemaField('model', 'STRING'),  # Product model number
+            bigquery.SchemaField('category', 'STRING'),  # Product category
+            bigquery.SchemaField('sku', 'STRING'),  # SKU/Product code
         ]
     
     def _insert_batch(self):

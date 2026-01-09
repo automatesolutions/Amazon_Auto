@@ -95,6 +95,24 @@ class ProductItem(scrapy.Item):
     # Images
     image_urls = scrapy.Field()
     
+    # Product Details
+    brand = scrapy.Field(
+        input_processor=MapCompose(clean_text),
+        output_processor=TakeFirst()
+    )
+    model = scrapy.Field(
+        input_processor=MapCompose(clean_text),
+        output_processor=TakeFirst()
+    )
+    category = scrapy.Field(
+        input_processor=MapCompose(clean_text),
+        output_processor=TakeFirst()
+    )
+    sku = scrapy.Field(
+        input_processor=MapCompose(clean_text),
+        output_processor=TakeFirst()
+    )
+    
     # Metadata
     scraped_at = scrapy.Field(output_processor=TakeFirst())
     

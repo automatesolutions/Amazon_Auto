@@ -1,5 +1,5 @@
 """
-Walmart spider with API discovery and product scraping.
+Kohl's spider with API discovery and product scraping.
 """
 import scrapy
 import logging
@@ -12,25 +12,25 @@ from retail_intelligence.utils.api_discovery import APIDiscovery
 logger = logging.getLogger(__name__)
 
 
-class WalmartSpider(scrapy.Spider):
+class KohlsSpider(scrapy.Spider):
     """
-    Spider for scraping Walmart product data.
+    Spider for scraping Kohl's product data.
     Uses API discovery to find hidden endpoints before scraping HTML.
     """
     
-    name = 'walmart'
-    allowed_domains = ['walmart.com', 'walmart.ca']
+    name = 'kohls'
+    allowed_domains = ['kohls.com']
     
     def __init__(self, *args, **kwargs):
-        super(WalmartSpider, self).__init__(*args, **kwargs)
+        super(KohlsSpider, self).__init__(*args, **kwargs)
         self.api_discovery = APIDiscovery(browser_type='chrome110')
         self.start_urls = kwargs.get('start_urls', '').split(',') if kwargs.get('start_urls') else []
         
         # Default start URLs if none provided
         if not self.start_urls:
             self.start_urls = [
-                'https://www.walmart.com/search?q=laptop',
-                'https://www.walmart.com/search?q=smartphone',
+                'https://www.kohls.com/search.jsp?submit-search=web-regular&search=laptop',
+                'https://www.kohls.com/search.jsp?submit-search=web-regular&search=smartphone',
             ]
     
     async def start(self):
@@ -43,39 +43,30 @@ class WalmartSpider(scrapy.Spider):
             )
     
     def parse_search_results(self, response):
-        """Parse Walmart search results page"""
+        """Parse Kohl's search results page"""
         logger.info(f'Parsing search results page: {response.url} (status: {response.status})')
         
-        # Check if we got a valid response
         if response.status != 200:
             logger.warning(f'Non-200 status code {response.status} for {response.url}')
             return
-        
-        # Log response size for debugging
-        logger.debug(f'Response size: {len(response.text)} bytes')
         
         # Try API discovery first
         api_endpoints = self.api_discovery.discover_from_html(
             response.text,
             response.url,
-            site='walmart'
+            site='kohls'
         )
         
-        # Extract product links from search results - try ALL selectors and combine
+        # Extract product links from search results
         product_links = []
-        
-        # Try various selectors for Walmart product links (try ALL, don't break early)
         selectors = [
-            'div[data-testid="item-stack"] a::attr(href)',
-            'a[data-testid="product-title"]::attr(href)',
-            'div[data-automation-id="product-title"] a::attr(href)',
-            'a[href*="/ip/"]::attr(href)',
-            'div[class*="search-result"] a[href*="/ip/"]::attr(href)',
+            'div[data-product-id] a::attr(href)',
+            'a[data-product-id]::attr(href)',
+            'div.product-tile a::attr(href)',
+            'a.product-tile-link::attr(href)',
             'div[class*="ProductTile"] a::attr(href)',
-            'div[class*="product-tile"] a::attr(href)',
             'a[href*="/product/"]::attr(href)',
-            'div[data-testid*="product"] a::attr(href)',
-            'div[class*="item"] a[href*="/ip/"]::attr(href)',
+            'a[href*="/prd-"]::attr(href)',
         ]
         
         for selector in selectors:
@@ -84,7 +75,7 @@ class WalmartSpider(scrapy.Spider):
                 product_links.extend(links)
                 logger.debug(f'Found {len(links)} links using selector: {selector}')
         
-        # Remove duplicates while preserving order
+        # Remove duplicates
         seen = set()
         unique_links = []
         for link in product_links:
@@ -94,33 +85,24 @@ class WalmartSpider(scrapy.Spider):
         
         logger.info(f'Found {len(unique_links)} unique product links on {response.url}')
         
-        # Filter for product links - Walmart product URLs typically contain /ip/ or /product/
+        # Filter for product links
         product_count = 0
-        filtered_out = 0
-        
         for link in unique_links:
             if not link:
                 continue
-                
-            # Check if this looks like a product link
-            # Walmart product URLs: /ip/ProductName/123456 or /product/...
+            
             is_product_link = (
-                '/ip/' in link or 
                 '/product/' in link or
-                link.startswith('/ip/') or
-                'walmart.com/ip/' in link
+                '/prd-' in link or
+                'kohls.com/product/' in link
             )
             
-            # Skip non-product links (like search, category, etc.)
             skip_patterns = [
                 '/search',
                 '/browse',
                 '/category',
-                '/c/',
-                '/cp/',
                 '/account',
                 '/cart',
-                '/checkout',
                 'javascript:',
                 '#',
             ]
@@ -128,13 +110,11 @@ class WalmartSpider(scrapy.Spider):
             should_skip = any(pattern in link.lower() for pattern in skip_patterns)
             
             if is_product_link and not should_skip:
-                # Convert relative URLs to absolute
                 if link.startswith('/'):
                     product_url = response.urljoin(link)
                 else:
                     product_url = link
                 
-                # Clean up URL (remove query parameters that might cause duplicates)
                 if '?' in product_url:
                     product_url = product_url.split('?')[0]
                 
@@ -145,98 +125,98 @@ class WalmartSpider(scrapy.Spider):
                     callback=self.parse_product,
                     meta={'dont_cache': False}
                 )
-            else:
-                filtered_out += 1
-                logger.debug(f'Filtered out non-product link: {link[:80]}...')
         
-        logger.info(f'Yielded {product_count} product requests from search results (filtered out {filtered_out} non-product links)')
+        logger.info(f'Yielded {product_count} product requests from search results')
         
-        # Follow pagination - try multiple selectors and patterns
+        # Follow pagination
         next_page = None
         pagination_selectors = [
-            'a[data-testid="next-page"]::attr(href)',
-            'nav[aria-label="pagination"] a[aria-label="Next"]::attr(href)',
             'a[aria-label="Next"]::attr(href)',
-            'a[data-automation-id="pagination-next"]::attr(href)',
-            'a.paginator-btn[aria-label="Next"]::attr(href)',
-            'a[aria-label*="Next"]::attr(href)',
-            'button[aria-label*="Next"]::attr(data-href)',
+            'a.pagination-next::attr(href)',
             'a[class*="next"]::attr(href)',
-            'a[class*="pagination-next"]::attr(href)',
+            'button[aria-label*="Next"]::attr(data-href)',
         ]
         
         for selector in pagination_selectors:
             next_page = response.css(selector).get()
             if next_page:
-                logger.info(f'Found next page link using selector "{selector}": {next_page}')
+                logger.info(f'Found next page link: {next_page}')
                 break
         
-        # Also try to find pagination in URL parameters (page=2, etc.)
         if not next_page:
-            # Check current page number
+            # Try URL-based pagination
             parsed = urlparse(response.url)
             params = parse_qs(parsed.query)
             current_page = int(params.get('page', ['1'])[0])
-            next_page_num = current_page + 1
-            
-            # Try to construct next page URL
-            params['page'] = [str(next_page_num)]
-            new_query = urlencode(params, doseq=True)
-            next_page_url = urlunparse((
-                parsed.scheme, parsed.netloc, parsed.path,
-                parsed.params, new_query, parsed.fragment
-            ))
-            
-            # Only use constructed URL if we're on a reasonable page number
-            if current_page < 50:  # Reasonable limit
-                next_page = next_page_url
-                logger.info(f'Constructed next page URL: {next_page}')
+            if current_page < 50:
+                next_page_num = current_page + 1
+                params['page'] = [str(next_page_num)]
+                new_query = urlencode(params, doseq=True)
+                next_page = urlunparse((
+                    parsed.scheme, parsed.netloc, parsed.path,
+                    parsed.params, new_query, parsed.fragment
+                ))
         
         if next_page:
             logger.info(f'Following pagination to: {next_page}')
             yield response.follow(next_page, callback=self.parse_search_results)
-        else:
-            logger.info('No pagination link found - reached end of results')
     
     def parse_product(self, response):
-        """Parse Walmart product detail page"""
+        """Parse Kohl's product detail page"""
         logger.debug(f'Parsing product page: {response.url}')
         item = ProductItem()
         
-        # Extract product ID from URL - handle multiple URL patterns
-        product_id_match = re.search(r'/ip/([^/?]+)', response.url)
+        # Extract product ID from URL
+        product_id_match = re.search(r'/product/(\d+)', response.url)
         if not product_id_match:
-            # Try /product/ pattern
-            product_id_match = re.search(r'/product/([^/?]+)', response.url)
+            product_id_match = re.search(r'/prd-(\d+)', response.url)
         if not product_id_match:
-            # Try to extract any product identifier
-            product_id_match = re.search(r'/([A-Z0-9]{8,})', response.url)
+            product_id_match = re.search(r'/(\d{6,})', response.url)
         
         if product_id_match:
-            item['product_id'] = product_id_match.group(1)
+            item['product_id'] = f"kohls_{product_id_match.group(1)}"
         else:
             # Fallback: extract from page
-            product_id_element = response.css('span[itemprop="productID"]::text').get()
+            product_id_element = response.css('div[data-product-id]::attr(data-product-id)').get()
             if product_id_element:
-                item['product_id'] = product_id_element
+                item['product_id'] = f"kohls_{product_id_element}"
             else:
-                # Last resort: use URL as product ID
-                item['product_id'] = response.url.split('/')[-1].split('?')[0]
+                item['product_id'] = f"kohls_{response.url.split('/')[-1].split('?')[0]}"
         
-        item['site'] = 'walmart'
+        item['site'] = 'kohls'
         item['url'] = response.url
         
         # Extract product details
-        item['title'] = response.css('h1[itemprop="name"]::text').get() or \
-                       response.css('h1.prod-ProductTitle::text').get() or \
+        item['title'] = response.css('h1.product-title::text').get() or \
+                       response.css('h1[itemprop="name"]::text').get() or \
                        response.css('h1::text').get()
+        
+        # Brand extraction
+        brand = response.css('span.brand-name::text').get() or \
+                response.css('a.brand-link::text').get() or \
+                response.css('div[itemprop="brand"] span::text').get()
+        if brand:
+            item['brand'] = brand.strip()
+        
+        # Model/SKU extraction
+        sku = response.css('span.product-number::text').get() or \
+              response.css('div[itemprop="sku"]::text').get()
+        if sku:
+            item['sku'] = sku.strip()
+            item['model'] = sku.strip()
+        
+        # Category
+        category = response.css('nav.breadcrumb a::text').getall()
+        if category:
+            item['category'] = ' > '.join(category[-2:])  # Last 2 levels
         
         # Price extraction
         price_selectors = [
+            'span.product-price::text',
             'span[itemprop="price"]::text',
-            'span.price-current::text',
-            'div[data-testid="price"] span::text',
-            'span.price-characteristic::text',
+            'div.price-wrapper span::text',
+            'span.regular-price::text',
+            'span.sale-price::text',
         ]
         for selector in price_selectors:
             price = response.css(selector).get()
@@ -244,37 +224,44 @@ class WalmartSpider(scrapy.Spider):
                 item['price'] = price
                 break
         
-        # Currency (Walmart US uses USD)
+        # Currency (Kohl's US uses USD)
         item['currency'] = 'USD'
         
         # Rating
         rating = response.css('span[itemprop="ratingValue"]::text').get()
+        if not rating:
+            rating = response.css('div.rating-stars::attr(data-rating)').get()
         if rating:
             item['rating'] = rating
         
         # Review count
         review_count = response.css('span[itemprop="reviewCount"]::text').get()
+        if not review_count:
+            review_count = response.css('a.reviews-link::text').re_first(r'(\d+)')
         if review_count:
             item['review_count'] = review_count
         
         # Availability
-        availability = response.css('span.prod-ProductOffer-availability::text').get()
+        availability = response.css('div.availability span::text').get()
         if not availability:
-            availability = response.css('div[data-testid="availability"] span::text').get()
+            availability = response.css('span.in-stock::text').get() or \
+                          response.css('span.out-of-stock::text').get()
         if availability:
-            item['availability'] = availability
+            item['availability'] = availability.strip()
         
         # Description
         description_parts = response.css('div[itemprop="description"] p::text').getall()
         if not description_parts:
-            description_parts = response.css('div.about-desc p::text').getall()
+            description_parts = response.css('div.product-description p::text').getall()
         if description_parts:
             item['description'] = ' '.join(description_parts)
         
         # Images
-        image_urls = response.css('img[data-testid="product-image"]::attr(src)').getall()
+        image_urls = response.css('img[itemprop="image"]::attr(src)').getall()
         if not image_urls:
-            image_urls = response.css('div[data-testid="image-gallery"] img::attr(src)').getall()
+            image_urls = response.css('div.product-image img::attr(src)').getall()
+        if not image_urls:
+            image_urls = response.css('img.product-image::attr(src)').getall()
         item['image_urls'] = image_urls
         
         # Metadata
@@ -286,5 +273,5 @@ class WalmartSpider(scrapy.Spider):
     def closed(self, reason):
         """Cleanup when spider closes"""
         self.api_discovery.close()
-        logger.info(f'Walmart spider closed: {reason}')
+        logger.info(f'Kohl\'s spider closed: {reason}')
 

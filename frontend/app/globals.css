@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 15, 23, 12;
+  --background-overlay: rgba(255, 255, 255, 0.85);
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    url('/background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  font-weight: 600;
+  min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+@layer utilities {
+  .text-matcha {
+    color: #2d4a26;
+  }
+  
+  .border-matcha {
+    border-color: #2d4a26;
+  }
+  
+  .bg-matcha {
+    background-color: #5a8a4a;
+  }
+  
+  .genx-border {
+    border: 3px solid #1a2d17;
+  }
+  
+  .genx-button {
+    @apply px-6 py-3 font-black text-white bg-primary-700 border-3 border-primary-900 shadow-genx transition-all;
+  }
+  
+  .genx-button:hover {
+    @apply bg-primary-800 shadow-genx-lg transform translate-x-[-2px] translate-y-[-2px];
+  }
+  
+  .genx-card {
+    @apply bg-white/95 backdrop-blur-sm border-3 border-primary-900 shadow-genx;
+  }
+  
+  .genx-card:hover {
+    @apply bg-white shadow-genx-lg transform translate-x-[-2px] translate-y-[-2px];
+  }
+  
+  /* Enhanced text contrast */
+  .text-primary-800 {
+    color: #1a2d17;
+  }
+  
+  .text-primary-900 {
+    color: #0f170c;
+  }
+}
+

@@ -106,3 +106,10 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 # Enable and configure AutoThrottle extension
 AUTOTHROTTLE_ENABLED = True
 
+# Depth limit for crawling (0 = no limit)
+DEPTH_LIMIT = 0
+
+# Log level for spider debugging
+# Set to DEBUG to see detailed extraction logs
+# LOG_LEVEL = 'DEBUG'  # Uncomment for detailed debugging
+

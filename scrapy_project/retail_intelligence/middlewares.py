@@ -95,7 +95,29 @@ class BrightDataProxyMiddleware:
         return None
     
     def _process_via_api(self, request, spider):
-        """Process request through Bright Data API"""
+        """Process request through Bright Data API with retry logic"""
+        max_retries = 3
+        base_timeout = 60  # Increased from 30 to 60 seconds
+        retry_count = request.meta.get('bright_data_api_retry', 0)
+        
+        # If we've exceeded retries, fallback to proxy mode if available
+        if retry_count >= max_retries:
+            logger.warning(
+                f'Bright Data API failed after {max_retries} retries for {request.url}. '
+                f'Falling back to proxy mode if available.'
+            )
+            # Try to use traditional proxy as fallback
+            if self.site_unblocker_proxy or self.residential_proxy:
+                proxy_url = self._select_proxy(request)
+                if proxy_url:
+                    request.meta['proxy'] = proxy_url
+                    request.meta['proxy_type'] = self._get_proxy_type(proxy_url)
+                    request.meta.pop('bright_data_api_retry', None)
+                    logger.info(f'Using proxy fallback: {request.meta["proxy_type"]} for {request.url}')
+                    return None
+            # If no proxy available, return None to let Scrapy handle
+            return None
+        
         try:
             headers = {
                 'Content-Type': 'application/json',
@@ -121,15 +143,32 @@ class BrightDataProxyMiddleware:
                     headers_dict[key_str] = value_str
                 payload['headers'] = headers_dict
             
-            logger.debug(f'Making Bright Data API request for: {request.url}')
+            # Calculate timeout with exponential backoff
+            timeout = base_timeout * (2 ** retry_count)
+            timeout = min(timeout, 120)  # Cap at 120 seconds
+            
+            logger.debug(
+                f'Making Bright Data API request for: {request.url} '
+                f'(attempt {retry_count + 1}/{max_retries}, timeout={timeout}s)'
+            )
             
             # Make API request
             response = requests.post(
                 self.api_endpoint,
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=timeout
             )
+            
+            # Check for API errors in response
+            if response.status_code != 200:
+                error_msg = f'Bright Data API returned status {response.status_code}'
+                try:
+                    error_data = response.json()
+                    error_msg += f': {error_data}'
+                except:
+                    error_msg += f': {response.text[:200]}'
+                raise Exception(error_msg)
             
             # Create Scrapy TextResponse from API response (TextResponse supports .text attribute)
             scrapy_response = TextResponse(
@@ -143,13 +182,48 @@ class BrightDataProxyMiddleware:
             
             request.meta['bright_data_processed'] = True
             request.meta['proxy_type'] = 'site_unblocker_api'
+            request.meta.pop('bright_data_api_retry', None)  # Clear retry count on success
             
+            logger.debug(f'Bright Data API request successful for: {request.url}')
             return scrapy_response
+            
+        except requests.exceptions.Timeout as e:
+            logger.warning(
+                f'Bright Data API timeout for {request.url} (attempt {retry_count + 1}/{max_retries}): {e}'
+            )
+            # Retry by returning a new request
+            return self._retry_api_request(request, retry_count + 1)
+            
+        except requests.exceptions.RequestException as e:
+            logger.warning(
+                f'Bright Data API request error for {request.url} (attempt {retry_count + 1}/{max_retries}): {e}'
+            )
+            # Retry for connection errors
+            return self._retry_api_request(request, retry_count + 1)
             
         except Exception as e:
             logger.error(f'Bright Data API request failed for {request.url}: {e}')
-            # Return None to let Scrapy handle the error
+            # For other errors, try retry once more
+            if retry_count < max_retries - 1:
+                return self._retry_api_request(request, retry_count + 1)
+            # Return None to let Scrapy handle the error or fallback to proxy
             return None
+    
+    def _retry_api_request(self, request, retry_count):
+        """Retry API request by returning a new request with incremented retry count"""
+        logger.info(
+            f'Retrying Bright Data API request for {request.url} '
+            f'(attempt {retry_count + 1})'
+        )
+        
+        # Create new request with incremented retry count
+        new_request = request.copy()
+        new_request.meta['bright_data_api_retry'] = retry_count
+        new_request.dont_filter = True
+        new_request.meta.pop('bright_data_processed', None)  # Reset processed flag
+        
+        # Return the new request to retry
+        return new_request
     
     def process_response(self, request, response, spider):
         """Handle proxy failures and implement failover"""

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   redis:
     image: redis:7-alpine
-    container_name: retail_intelligence_redis
+    container_name: crossretail_redis
     ports:
       - "6379:6379"
     volumes:
@@ -16,6 +16,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crossretail_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
+      - BQ_DATASET=${BQ_DATASET}
+      - BQ_TABLE=${BQ_TABLE}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+    depends_on:
+      - redis
+    volumes:
+      - ./config/gcp-credentials.json:${GOOGLE_APPLICATION_CREDENTIALS:-/app/gcp-credentials.json}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: crossretail_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   redis_data:

@@ -62,14 +62,16 @@ class APIDiscovery:
                 url = entry['request'].get('url', '')
                 if self._is_api_endpoint(url, site):
                     api_info = self._extract_api_info(url, entry)
-                    discovered.append(api_info)
+                    if api_info:  # Only append if valid
+                        discovered.append(api_info)
         
         # Handle list of URLs
         elif isinstance(network_data, list):
             for url in network_data:
                 if isinstance(url, str) and self._is_api_endpoint(url, site):
                     api_info = self._extract_api_info(url)
-                    discovered.append(api_info)
+                    if api_info:  # Only append if valid
+                        discovered.append(api_info)
         
         # Cache discovered APIs
         for api in discovered:
@@ -119,7 +121,8 @@ class APIDiscovery:
             url = match.group(1)
             if self._is_api_endpoint(url, site):
                 api_info = self._extract_api_info(url)
-                discovered.append(api_info)
+                if api_info:  # Only append if valid
+                    discovered.append(api_info)
         
         logger.info(f'Discovered {len(discovered)} API endpoints from HTML for {site}')
         return discovered
@@ -172,7 +175,12 @@ class APIDiscovery:
     
     def _extract_api_info(self, url, har_entry=None):
         """Extract API endpoint information"""
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except (ValueError, Exception) as e:
+            # Skip invalid URLs (e.g., IPv6 URLs, malformed URLs)
+            logger.debug(f'Skipping invalid URL: {url} - {e}')
+            return None
         
         api_info = {
             'endpoint': url,
@@ -196,7 +204,9 @@ class APIDiscovery:
             for key, value in data.items():
                 if isinstance(value, str) and value.startswith('http'):
                     if self._is_api_endpoint(value, site):
-                        endpoints.append(self._extract_api_info(value))
+                        api_info = self._extract_api_info(value)
+                        if api_info:  # Only append if valid
+                            endpoints.append(api_info)
                 elif isinstance(value, (dict, list)):
                     endpoints.extend(self._extract_endpoints_from_json(value, base_url, site))
         
