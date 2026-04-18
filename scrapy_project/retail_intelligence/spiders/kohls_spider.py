@@ -210,19 +210,74 @@ class KohlsSpider(scrapy.Spider):
         if category:
             item['category'] = ' > '.join(category[-2:])  # Last 2 levels
         
-        # Price extraction
+        # Price extraction - Kohl's has multiple price formats
+        price = None
+        
+        # Try multiple selectors and formats
         price_selectors = [
             'span.product-price::text',
             'span[itemprop="price"]::text',
+            'span[itemprop="price"]::attr(content)',
             'div.price-wrapper span::text',
             'span.regular-price::text',
             'span.sale-price::text',
+            'span.price::text',
+            'div.product-price::text',
+            'span.current-price::text',
+            'div.current-price span::text',
         ]
+        
         for selector in price_selectors:
-            price = response.css(selector).get()
-            if price:
+            price_text = response.css(selector).get()
+            if price_text:
+                price_text = price_text.strip()
+                # Skip "from" prices
+                if 'from' not in price_text.lower() and 'starting at' not in price_text.lower():
+                    # Check if it contains a valid price pattern
+                    if re.search(r'\$?\d+\.?\d*', price_text):
+                        price = price_text
+                        break
+        
+        # If still no price, try extracting from structured data
+        if not price:
+            # Try JSON-LD structured data
+            json_ld = response.css('script[type="application/ld+json"]::text').getall()
+            for script in json_ld:
+                try:
+                    import json
+                    data = json.loads(script)
+                    if isinstance(data, dict) and 'offers' in data:
+                        offers = data['offers']
+                        if isinstance(offers, dict) and 'price' in offers:
+                            price = str(offers['price'])
+                            break
+                        elif isinstance(offers, list) and len(offers) > 0 and 'price' in offers[0]:
+                            price = str(offers[0]['price'])
+                            break
+                except:
+                    continue
+        
+        # Validate price is reasonable
+        if price:
+            price_match = re.search(r'[\d,]+\.?\d*', price.replace(',', ''))
+            if price_match:
+                try:
+                    price_value = float(price_match.group().replace(',', ''))
+                    # Check if price seems too low for expensive items
+                    title_lower = (item.get('title') or '').lower()
+                    expensive_keywords = ['laptop', 'computer', 'gaming', 'macbook', 'thinkpad', 
+                                         'iphone', 'samsung', 'tablet', 'ipad', 'monitor', 'tv']
+                    is_expensive_item = any(keyword in title_lower for keyword in expensive_keywords)
+                    
+                    if is_expensive_item and price_value < 10:
+                        logger.warning(f'Price ${price_value} seems too low for expensive item: {item.get("title")}')
+                        # Don't set price if it's clearly wrong
+                    elif price_value > 0:
+                        item['price'] = str(price_value)
+                except ValueError:
+                    pass
+            else:
                 item['price'] = price
-                break
         
         # Currency (Kohl's US uses USD)
         item['currency'] = 'USD'
@@ -256,12 +311,62 @@ class KohlsSpider(scrapy.Spider):
         if description_parts:
             item['description'] = ' '.join(description_parts)
         
-        # Images
-        image_urls = response.css('img[itemprop="image"]::attr(src)').getall()
+        # Images - try multiple selectors for Kohl's, ensure we get at least one
+        image_urls = []
+        selectors = [
+            'img[itemprop="image"]::attr(data-src)',  # Lazy-loaded
+            'img[itemprop="image"]::attr(src)',
+            'img[itemprop="image"]::attr(data-lazy-src)',
+            'div.product-image img::attr(data-src)',
+            'div.product-image img::attr(src)',
+            'div.product-image img::attr(data-lazy-src)',
+            'img.product-image::attr(data-src)',
+            'img.product-image::attr(src)',
+            'div[data-product-image] img::attr(src)',
+            'div.ImageWrapper img::attr(src)',
+            'div.product-hero-image img::attr(data-src)',
+            'div.product-hero-image img::attr(src)',
+            'img.main-product-image::attr(src)',
+            'img[class*="product"]::attr(src)',
+            'img[class*="Product"]::attr(src)',
+        ]
+        
+        for selector in selectors:
+            images = response.css(selector).getall()
+            for img_url in images:
+                if not img_url:
+                    continue
+                # Skip placeholder images
+                if 'placeholder' in img_url.lower() or 'pixel.gif' in img_url.lower():
+                    continue
+                # Handle protocol-relative URLs
+                if img_url.startswith('//'):
+                    img_url = 'https:' + img_url
+                # Only add valid HTTP(S) URLs
+                if img_url.startswith('http') and img_url not in image_urls:
+                    # Clean up Kohl's image URLs to get full resolution
+                    if 'kohls.com' in img_url and '?' in img_url:
+                        # Remove size parameters
+                        img_url = img_url.split('?')[0]
+                    image_urls.append(img_url)
+                    if len(image_urls) >= 5:  # Limit to first 5 images
+                        break
+            if len(image_urls) >= 5:
+                break
+        
+        # Fallback: extract from page source if no images found
         if not image_urls:
-            image_urls = response.css('div.product-image img::attr(src)').getall()
+            img_pattern = re.compile(r'https?://[^"\s]+kohls[^"\s]+\.(jpg|jpeg|png|gif|webp)', re.IGNORECASE)
+            for img_match in img_pattern.finditer(response.text):
+                img_url = img_match.group(0)
+                if 'placeholder' not in img_url.lower() and img_url not in image_urls:
+                    image_urls.append(img_url)
+                    if len(image_urls) >= 3:
+                        break
+        
         if not image_urls:
-            image_urls = response.css('img.product-image::attr(src)').getall()
+            logger.warning(f'No images found for product {item.get("product_id")} at {response.url}')
+        
         item['image_urls'] = image_urls
         
         # Metadata

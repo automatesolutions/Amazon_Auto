@@ -136,6 +136,50 @@ class BigQueryAnalyticsPipeline:
             mapper = SchemaMapper()
             normalized_item = mapper.normalize_item(item)
             
+            # Validate required fields: must have both image and price
+            price = normalized_item.get('price')
+            has_price = price is not None and price >= 0.01
+            
+            # Additional price validation: check if price seems realistic for the product
+            if has_price:
+                title = (normalized_item.get('title') or '').lower()
+                expensive_keywords = ['laptop', 'computer', 'gaming', 'macbook', 'thinkpad', 'alienware', 
+                                     'iphone', 'samsung', 'tablet', 'ipad', 'monitor', 'tv', 'television',
+                                     'playstation', 'xbox', 'nintendo', 'gpu', 'graphics card']
+                is_expensive_item = any(keyword in title for keyword in expensive_keywords)
+                
+                # Prices below $10 for expensive items are likely errors
+                if is_expensive_item and price < 10:
+                    logger.warning(f'Skipping item {normalized_item.get("product_id")} - price ${price} too low for expensive item: {normalized_item.get("title")}')
+                    return item
+                
+                # Prices above $100,000 are likely errors
+                if price > 100000:
+                    logger.warning(f'Skipping item {normalized_item.get("product_id")} - price ${price} seems too high')
+                    return item
+            
+            if not has_price:
+                logger.warning(f'Skipping item {normalized_item.get("product_id")} - missing or invalid price')
+                return item
+            
+            has_image = normalized_item.get('image_urls') and len(normalized_item.get('image_urls', [])) > 0
+            
+            if not has_image:
+                logger.warning(f'Skipping item {normalized_item.get("product_id")} - missing images')
+                return item
+            
+            # Validate image URLs are valid HTTP URLs
+            valid_images = []
+            for img_url in normalized_item.get('image_urls', []):
+                if img_url and (img_url.startswith('http://') or img_url.startswith('https://')):
+                    valid_images.append(img_url)
+            
+            if not valid_images:
+                logger.warning(f'Skipping item {normalized_item.get("product_id")} - no valid image URLs')
+                return item
+            
+            normalized_item['image_urls'] = valid_images
+            
             # Add to batch
             self.batch.append(normalized_item)
             

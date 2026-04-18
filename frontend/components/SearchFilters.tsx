@@ -5,6 +5,8 @@ import { api, Brand } from '@/lib/api'
 
 interface SearchFiltersProps {
   onFilterChange: (filters: FilterState) => void
+  onScrape?: (filters: FilterState) => void
+  isScraping?: boolean
 }
 
 export interface FilterState {
@@ -22,7 +24,7 @@ const RETAILERS = [
   { value: 'kmart', label: 'Kmart' },
 ]
 
-export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
+export default function SearchFilters({ onFilterChange, onScrape, isScraping = false }: SearchFiltersProps) {
   const [brands, setBrands] = useState<Brand[]>([])
   const [filters, setFilters] = useState<FilterState>({
     query: '',
@@ -40,6 +42,8 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
   const updateFilter = (key: keyof FilterState, value: any) => {
     const newFilters = { ...filters, [key]: value }
     setFilters(newFilters)
+    // Only update filters - this will trigger search query but NOT scraping
+    // Scraping only happens when EXECUTE button is clicked
     onFilterChange(newFilters)
   }
 
@@ -122,7 +126,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
         <label className="block text-sm font-bold text-primary-800 mb-3 uppercase tracking-wide">
           Price Range
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="flex gap-3">
           <input
             type="number"
             placeholder="Min"
@@ -130,7 +134,7 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
             onChange={(e) =>
               updateFilter('minPrice', e.target.value ? parseFloat(e.target.value) : null)
             }
-            className="px-4 py-3 border-2 border-primary-800 bg-white text-primary-900 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-300 shadow-genx"
+            className="flex-1 min-w-[80px] px-4 py-3 border-2 border-primary-800 bg-white text-primary-900 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-300 shadow-genx"
           />
           <input
             type="number"
@@ -139,27 +143,22 @@ export default function SearchFilters({ onFilterChange }: SearchFiltersProps) {
             onChange={(e) =>
               updateFilter('maxPrice', e.target.value ? parseFloat(e.target.value) : null)
             }
-            className="px-4 py-3 border-2 border-primary-800 bg-white text-primary-900 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-300 shadow-genx"
+            className="flex-1 min-w-[80px] px-4 py-3 border-2 border-primary-800 bg-white text-primary-900 font-semibold focus:outline-none focus:ring-4 focus:ring-primary-300 shadow-genx"
           />
         </div>
       </div>
 
-      {/* Clear Filters */}
+      {/* Execute Scrape Button */}
       <button
         onClick={() => {
-          const cleared = {
-            query: '',
-            brands: [],
-            retailers: [],
-            minPrice: null,
-            maxPrice: null,
+          if (onScrape) {
+            onScrape(filters)
           }
-          setFilters(cleared)
-          onFilterChange(cleared)
         }}
-        className="w-full px-6 py-3 font-bold bg-primary-200 text-primary-800 border-2 border-primary-800 hover:bg-primary-300 transition-all"
+        disabled={isScraping || !filters.query || filters.query.trim() === ''}
+        className="w-full px-6 py-3 font-bold bg-primary-700 text-white border-2 border-primary-900 hover:bg-primary-800 disabled:opacity-50 disabled:cursor-not-allowed shadow-genx transition-all uppercase tracking-wide"
       >
-        Clear Filters
+        {isScraping ? 'Scraping...' : 'EXECUTE'}
       </button>
     </div>
   )

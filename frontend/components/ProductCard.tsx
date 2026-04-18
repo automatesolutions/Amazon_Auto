@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Product } from '@/lib/api'
@@ -11,6 +12,39 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, onSelect, selected }: ProductCardProps) {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [isPlaceholder, setIsPlaceholder] = useState(false)
+
+  // Don't render if no valid image URL
+  const hasValidImage = product.image_url && 
+    typeof product.image_url === 'string' &&
+    product.image_url.trim() !== '' && 
+    (product.image_url.startsWith('http://') || product.image_url.startsWith('https://'))
+  
+  // Check if URL is a placeholder image
+  const isPlaceholderUrl = (url: string): boolean => {
+    const placeholderPatterns = [
+      'grey-pixel.gif',
+      'pixel.gif',
+      '1x1.gif',
+      'blank.gif',
+      'placeholder',
+      'spacer.gif',
+      'transparent.gif'
+    ]
+    return placeholderPatterns.some(pattern => url.toLowerCase().includes(pattern))
+  }
+
+  if (!hasValidImage) {
+    return null
+  }
+
+  // Don't render if URL is a placeholder
+  if (product.image_url && isPlaceholderUrl(product.image_url)) {
+    return null
+  }
+
   const formatPrice = (price?: number, currency?: string) => {
     if (!price) return 'N/A'
     const symbol = currency === 'USD' ? '$' : currency || '$'
@@ -27,26 +61,52 @@ export default function ProductCard({ product, onSelect, selected }: ProductCard
     return colors[site.toLowerCase()] || 'bg-gray-100 text-gray-800'
   }
 
+  // Don't render if image fails to load or is a placeholder - hide the entire card
+  if (imageError || isPlaceholder) {
+    return null
+  }
+
   return (
     <div
       className={`genx-card overflow-hidden transition-all ${
         selected ? 'ring-4 ring-primary-400' : ''
-      }`}
+      } ${imageError ? 'hidden' : ''}`}
+      style={{ display: imageError ? 'none' : 'block' }}
     >
-      <div className="relative h-48 bg-white border-b-3 border-primary-900">
-        {product.image_url ? (
-          <Image
-            src={product.image_url}
-            alt={product.title || 'Product image'}
-            fill
-            className="object-contain"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            No Image
-          </div>
-        )}
+      <div className="relative h-48 bg-gray-100 border-b-3 border-primary-900 overflow-hidden">
+        <Image
+          src={product.image_url!}
+          alt={product.title || 'Product image'}
+          fill
+          className="object-contain p-2"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+          unoptimized
+          onError={(e) => {
+            console.warn(`Image failed to load for product ${product.product_id}:`, product.image_url)
+            setImageError(true)
+            // Hide the parent card
+            if (e.currentTarget.parentElement?.parentElement) {
+              e.currentTarget.parentElement.parentElement.style.display = 'none'
+            }
+          }}
+          onLoad={(e) => {
+            // Check if the loaded image is actually a placeholder
+            const img = e.currentTarget
+            const src = img.src || product.image_url || ''
+            
+            // Check if it's a placeholder by URL or by dimensions (1x1 pixel images are usually placeholders)
+            if (isPlaceholderUrl(src) || (img.naturalWidth <= 1 && img.naturalHeight <= 1)) {
+              setIsPlaceholder(true)
+              setImageError(true)
+              if (img.parentElement?.parentElement) {
+                img.parentElement.parentElement.style.display = 'none'
+              }
+              return
+            }
+            
+            setImageLoaded(true)
+          }}
+        />
       </div>
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">

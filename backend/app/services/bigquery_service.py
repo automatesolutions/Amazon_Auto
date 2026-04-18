@@ -72,6 +72,11 @@ class BigQueryService:
           sku
         FROM `{self.dataset}.{self.table}`
         WHERE 1=1
+          AND price IS NOT NULL 
+          AND price >= 0.01
+          AND ARRAY_LENGTH(image_urls) > 0
+          AND image_urls[OFFSET(0)] IS NOT NULL
+          AND image_urls[OFFSET(0)] != ''
         """
         
         params = []
@@ -97,8 +102,35 @@ class BigQueryService:
             sql += " AND price <= @max_price"
             params.append(bigquery.ScalarQueryParameter("max_price", "FLOAT", max_price))
         
-        # Get total count
-        count_sql = f"SELECT COUNT(DISTINCT product_id) as total FROM ({sql})"
+        # Build count query with same filters
+        count_sql = f"""
+        SELECT COUNT(DISTINCT product_id) as total 
+        FROM `{self.dataset}.{self.table}`
+        WHERE 1=1
+          AND price IS NOT NULL 
+          AND price >= 0.01
+          AND ARRAY_LENGTH(image_urls) > 0
+          AND image_urls[OFFSET(0)] IS NOT NULL
+          AND image_urls[OFFSET(0)] != ''
+        """
+        
+        # Add same filters to count query
+        count_params = []
+        if query:
+            count_sql += " AND LOWER(title) LIKE LOWER(@query)"
+            count_params.append(bigquery.ScalarQueryParameter("query", "STRING", f"%{query}%"))
+        if brands and len(brands) > 0:
+            count_sql += " AND brand IN UNNEST(@brands)"
+            count_params.append(bigquery.ArrayQueryParameter("brands", "STRING", brands))
+        if retailers and len(retailers) > 0:
+            count_sql += " AND site IN UNNEST(@retailers)"
+            count_params.append(bigquery.ArrayQueryParameter("retailers", "STRING", retailers))
+        if min_price is not None:
+            count_sql += " AND price >= @min_price"
+            count_params.append(bigquery.ScalarQueryParameter("min_price", "FLOAT", min_price))
+        if max_price is not None:
+            count_sql += " AND price <= @max_price"
+            count_params.append(bigquery.ScalarQueryParameter("max_price", "FLOAT", max_price))
         
         # Add ordering and pagination
         sql += " ORDER BY price ASC NULLS LAST, scraped_at DESC"
@@ -110,7 +142,7 @@ class BigQueryService:
         
         try:
             # Execute count query
-            count_job_config = bigquery.QueryJobConfig(query_parameters=params[:-2])
+            count_job_config = bigquery.QueryJobConfig(query_parameters=count_params)
             count_query_job = self.client.query(count_sql, job_config=count_job_config)
             count_result = list(count_query_job.result())[0]
             total = count_result.total
@@ -388,4 +420,34 @@ class BigQueryService:
         except Exception as e:
             logger.error(f"Error getting brands: {e}")
             raise
+    
+    def count_products_by_site(self, site: str, since: Optional[datetime] = None) -> int:
+        """Count products scraped for a specific site"""
+        sql = f"""
+        SELECT COUNT(DISTINCT product_id) as count
+        FROM `{self.dataset}.{self.table}`
+        WHERE site = @site
+          AND price IS NOT NULL
+          AND price >= 0.01
+          AND ARRAY_LENGTH(image_urls) > 0
+          AND image_urls[OFFSET(0)] IS NOT NULL
+          AND image_urls[OFFSET(0)] != ''
+        """
+        
+        params = [bigquery.ScalarQueryParameter("site", "STRING", site)]
+        
+        if since:
+            sql += " AND TIMESTAMP(scraped_at) >= TIMESTAMP(@since)"
+            params.append(bigquery.ScalarQueryParameter("since", "STRING", since.isoformat()))
+        
+        try:
+            job_config = bigquery.QueryJobConfig(query_parameters=params)
+            query_job = self.client.query(sql, job_config=job_config)
+            results = list(query_job.result())
+            if results:
+                return results[0].count
+            return 0
+        except Exception as e:
+            logger.error(f"Error counting products for site {site}: {e}")
+            return 0
 

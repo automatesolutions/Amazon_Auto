@@ -411,13 +411,24 @@ class KmartSpider(scrapy.Spider):
         if description_parts:
             item['description'] = ' '.join(description_parts)
         
-        # Images
-        image_urls = response.css('img[itemprop="image"]::attr(src)').getall()
-        if not image_urls:
-            image_urls = response.css('div.product-image img::attr(src)').getall()
-        if not image_urls:
-            image_urls = response.css('img.product-image::attr(src)').getall()
-        item['image_urls'] = image_urls
+        # Images - try multiple selectors
+        image_urls = []
+        selectors = [
+            'img[itemprop="image"]::attr(src)',
+            'img[itemprop="image"]::attr(data-src)',
+            'div.product-image img::attr(src)',
+            'div.product-image img::attr(data-src)',
+            'img.product-image::attr(src)',
+            'div[data-product-image] img::attr(src)',
+        ]
+        
+        for selector in selectors:
+            images = response.css(selector).getall()
+            for img_url in images:
+                if img_url and img_url.startswith('http') and img_url not in image_urls:
+                    image_urls.append(img_url)
+        
+        item['image_urls'] = image_urls[:5]  # Limit to first 5 images
         
         # Metadata
         item['scraped_at'] = datetime.utcnow().isoformat()

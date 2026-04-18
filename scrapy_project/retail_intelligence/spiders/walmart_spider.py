@@ -231,18 +231,52 @@ class WalmartSpider(scrapy.Spider):
                        response.css('h1.prod-ProductTitle::text').get() or \
                        response.css('h1::text').get()
         
-        # Price extraction
+        # Price extraction - prioritize actual selling price
+        price = None
         price_selectors = [
             'span[itemprop="price"]::text',
             'span.price-current::text',
             'div[data-testid="price"] span::text',
             'span.price-characteristic::text',
+            'span[data-automation-id="product-price"]::text',
         ]
         for selector in price_selectors:
-            price = response.css(selector).get()
-            if price:
-                item['price'] = price
-                break
+            price_text = response.css(selector).get()
+            if price_text:
+                # Skip "from" prices
+                if 'from' not in price_text.lower() and 'starting at' not in price_text.lower():
+                    price = price_text
+                    break
+        
+        # Validate price is reasonable
+        if price:
+            price_match = re.search(r'[\d,]+\.?\d*', price.replace(',', ''))
+            if price_match:
+                try:
+                    price_value = float(price_match.group().replace(',', ''))
+                    # Check if price seems too low for expensive items
+                    title_lower = (item.get('title') or '').lower()
+                    expensive_keywords = ['laptop', 'computer', 'gaming', 'macbook', 'thinkpad', 
+                                         'iphone', 'samsung', 'tablet', 'ipad', 'monitor', 'tv']
+                    is_expensive_item = any(keyword in title_lower for keyword in expensive_keywords)
+                    
+                    if is_expensive_item and price_value < 10:
+                        logger.warning(f'Price ${price_value} seems too low for expensive item: {item.get("title")}')
+                        # Try alternative price selectors
+                        alt_price = response.css('span[data-testid="price"]::text').get()
+                        if alt_price:
+                            alt_match = re.search(r'[\d,]+\.?\d*', alt_price.replace(',', ''))
+                            if alt_match:
+                                alt_value = float(alt_match.group().replace(',', ''))
+                                if alt_value >= 10:
+                                    price_value = alt_value
+                                    price = str(price_value)
+                                    logger.info(f'Using alternative price: ${price_value}')
+                    
+                    if price_value > 0:
+                        item['price'] = str(price_value)
+                except ValueError:
+                    pass
         
         # Currency (Walmart US uses USD)
         item['currency'] = 'USD'
@@ -271,11 +305,47 @@ class WalmartSpider(scrapy.Spider):
         if description_parts:
             item['description'] = ' '.join(description_parts)
         
-        # Images
-        image_urls = response.css('img[data-testid="product-image"]::attr(src)').getall()
+        # Images - try multiple selectors, ensure we get at least one
+        image_urls = []
+        selectors = [
+            'img[data-testid="product-image"]::attr(data-src)',  # Lazy-loaded
+            'img[data-testid="product-image"]::attr(src)',
+            'div[data-testid="image-gallery"] img::attr(data-src)',
+            'div[data-testid="image-gallery"] img::attr(src)',
+            'img.prod-hero-image-image::attr(src)',
+            'img[itemprop="image"]::attr(src)',
+            'div.prod-hero-image img::attr(src)',
+            'div[class*="product-image"] img::attr(src)',
+            'div[class*="hero-image"] img::attr(src)',
+        ]
+        
+        for selector in selectors:
+            images = response.css(selector).getall()
+            for img_url in images:
+                if img_url and img_url.startswith('http') and img_url not in image_urls:
+                    # Skip placeholder images
+                    if 'placeholder' in img_url.lower() or 'pixel.gif' in img_url.lower():
+                        continue
+                    image_urls.append(img_url)
+                    if len(image_urls) >= 5:
+                        break
+            if len(image_urls) >= 5:
+                break
+        
+        # Fallback: extract from page source if no images found
         if not image_urls:
-            image_urls = response.css('div[data-testid="image-gallery"] img::attr(src)').getall()
-        item['image_urls'] = image_urls
+            img_pattern = re.compile(r'https?://[^"\s]+walmart[^"\s]+\.(jpg|jpeg|png|gif|webp)', re.IGNORECASE)
+            for img_match in img_pattern.finditer(response.text):
+                img_url = img_match.group(0)
+                if 'placeholder' not in img_url.lower() and img_url not in image_urls:
+                    image_urls.append(img_url)
+                    if len(image_urls) >= 3:
+                        break
+        
+        if not image_urls:
+            logger.warning(f'No images found for product {item.get("product_id")} at {response.url}')
+        
+        item['image_urls'] = image_urls[:5]  # Limit to first 5 images
         
         # Metadata
         item['scraped_at'] = datetime.utcnow().isoformat()

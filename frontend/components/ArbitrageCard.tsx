@@ -13,9 +13,9 @@ export default function ArbitrageCard({ opportunity }: ArbitrageCardProps) {
   const profitMargin = opportunity.profit_margin_pct
 
   const getProfitColor = (margin: number) => {
-    if (margin >= 30) return 'text-green-600 bg-green-100'
-    if (margin >= 20) return 'text-blue-600 bg-blue-100'
-    if (margin >= 10) return 'text-yellow-600 bg-yellow-100'
+    if (margin >= 30) return 'text-accent-700 bg-accent-100' // Gold for high profit
+    if (margin >= 20) return 'text-primary-700 bg-primary-100' // Emerald for good profit
+    if (margin >= 10) return 'text-secondary-700 bg-secondary-100' // Navy for moderate profit
     return 'text-gray-600 bg-gray-100'
   }
 
@@ -43,7 +43,7 @@ export default function ArbitrageCard({ opportunity }: ArbitrageCardProps) {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-sm text-gray-500">Lowest Price</p>
-          <p className="text-xl font-bold text-green-600">
+          <p className="text-xl font-bold text-primary-600">
             {formatPrice(opportunity.min_price)}
           </p>
           {opportunity.cheapest_retailer && (

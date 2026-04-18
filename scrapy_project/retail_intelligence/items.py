@@ -7,14 +7,20 @@ from w3lib.html import remove_tags
 
 
 def clean_price(value):
-    """Extract numeric price from string"""
+    """Extract numeric price from string and validate"""
     if not value:
         return None
     # Remove currency symbols and whitespace
     import re
     cleaned = re.sub(r'[^\d.]', '', str(value))
     try:
-        return float(cleaned)
+        price = float(cleaned)
+        # Validate price is reasonable (not too low for expensive items)
+        # Prices below $0.50 are likely errors, but we'll allow them
+        # Prices above $100,000 are likely errors
+        if price < 0 or price > 100000:
+            return None
+        return price
     except ValueError:
         return None
 

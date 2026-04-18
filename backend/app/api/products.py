@@ -69,15 +69,42 @@ async def search_products(
             per_page=per_page
         )
         
-        # Process image URLs
+        # Process image URLs and validate products have required data
+        filtered_products = []
         for product in result["data"]:
+            # Validate price
+            has_price = product.get("price") is not None and product.get("price", 0) >= 0.01
+            if not has_price:
+                continue
+            
+            # Validate and set image URL
+            has_image = False
             if product.get("image_urls") and len(product["image_urls"]) > 0:
-                product["image_url"] = product["image_urls"][0]
-            # Generate signed URL if gcs_path exists
-            if product.get("gcs_path"):
+                # Get first valid image URL
+                for img_url in product["image_urls"]:
+                    if img_url and (img_url.startswith('http://') or img_url.startswith('https://')):
+                        product["image_url"] = img_url
+                        has_image = True
+                        break
+            
+            # Try GCS path if no image URL from image_urls
+            if not has_image and product.get("gcs_path"):
                 signed_url = gcs_service.get_image_url(product["gcs_path"])
                 if signed_url:
                     product["image_url"] = signed_url
+                    has_image = True
+            
+            # Only add product if it has both image and price
+            if has_image and has_price:
+                filtered_products.append(product)
+            else:
+                logger.warning(f"Skipping product {product.get('product_id')} - missing {'image' if not has_image else 'price'}")
+        
+        # Update result with filtered products
+        result["data"] = filtered_products
+        # Note: total count should already be correct from BigQuery, but update if needed
+        if result["meta"]["total"] != len(filtered_products):
+            logger.info(f"Filtered out {result['meta']['total'] - len(filtered_products)} products without required data")
         
         # Cache result
         cache_service.set(cache_key, result, ttl=300)  # 5 minutes

@@ -44,6 +44,10 @@ class SchemaMapper:
             'image_urls': self._normalize_image_urls(item.get('image_urls')),
             'scraped_at': self._normalize_timestamp(item.get('scraped_at')),
             'gcs_path': item.get('gcs_path', ''),
+            'brand': self._clean_text(item.get('brand')),
+            'model': self._clean_text(item.get('model')),
+            'category': self._clean_text(item.get('category')),
+            'sku': self._clean_text(item.get('sku')),
         }
         
         return normalized
@@ -104,12 +108,46 @@ class SchemaMapper:
         if isinstance(price, (int, float)):
             return float(price)
         
-        # Extract numeric value from string
+        # Extract numeric value from string, handling commas
         import re
-        match = re.search(r'[\d.]+', str(price))
+        price_str = str(price).strip()
+        
+        # Remove currency symbols and spaces
+        price_str = re.sub(r'[^\d.,]', '', price_str)
+        
+        # Handle comma-separated thousands (e.g., "1,299.00" or "1.299,00")
+        if ',' in price_str and '.' in price_str:
+            # Determine format: US (1,299.00) or European (1.299,00)
+            comma_pos = price_str.rfind(',')
+            dot_pos = price_str.rfind('.')
+            if comma_pos > dot_pos:
+                # European format: 1.299,00
+                price_str = price_str.replace('.', '').replace(',', '.')
+            else:
+                # US format: 1,299.00
+                price_str = price_str.replace(',', '')
+        elif ',' in price_str:
+            # Check if comma is decimal separator or thousands separator
+            parts = price_str.split(',')
+            if len(parts) == 2 and len(parts[1]) <= 2:
+                # Likely decimal separator (European format)
+                price_str = price_str.replace(',', '.')
+            else:
+                # Likely thousands separator
+                price_str = price_str.replace(',', '')
+        
+        # Extract final numeric value
+        match = re.search(r'[\d.]+', price_str)
         if match:
             try:
-                return float(match.group(0))
+                price_value = float(match.group(0))
+                # Sanity check: reject prices that seem too low (likely extraction errors)
+                # But allow prices >= 0.01 (for very cheap items)
+                if price_value >= 0.01:
+                    return price_value
+                else:
+                    logger.warning(f"Price {price_value} seems too low, rejecting")
+                    return None
             except ValueError:
                 pass
         

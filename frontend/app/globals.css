@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 15, 23, 12;
-  --background-overlay: rgba(255, 255, 255, 0.85);
+  --foreground-rgb: 17, 24, 39; /* Dark gray for better contrast on light gray background */
+  --background-overlay: rgba(229, 231, 235, 0.85);
 }
 
 body {
   color: rgb(var(--foreground-rgb));
+  background-color: #E5E7EB; /* Light Gray - Background for analytics */
   background-image: 
-    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)),
+    linear-gradient(rgba(229, 231, 235, 0.9), rgba(229, 231, 235, 0.9)),
     url('/background.png');
   background-size: cover;
   background-position: center;
@@ -30,8 +31,8 @@ body::before {
   bottom: 0;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.05) 100%
+    rgba(229, 231, 235, 0.1) 0%,
+    rgba(229, 231, 235, 0.05) 100%
   );
   pointer-events: none;
   z-index: 0;
@@ -39,19 +40,19 @@ body::before {
 
 @layer utilities {
   .text-matcha {
-    color: #2d4a26;
+    color: #047857;
   }
   
   .border-matcha {
-    border-color: #2d4a26;
+    border-color: #10b981;
   }
   
   .bg-matcha {
-    background-color: #5a8a4a;
+    background-color: #10b981;
   }
   
   .genx-border {
-    border: 3px solid #1a2d17;
+    border: 3px solid #065f46;
   }
   
   .genx-button {
@@ -72,11 +73,11 @@ body::before {
   
   /* Enhanced text contrast */
   .text-primary-800 {
-    color: #1a2d17;
+    color: #065f46;
   }
   
   .text-primary-900 {
-    color: #0f170c;
+    color: #064e3b;
   }
 }
 

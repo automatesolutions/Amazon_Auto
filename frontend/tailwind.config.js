@@ -9,22 +9,46 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: '#f0f7f4',
-          100: '#d4e8dd',
-          200: '#a8d5ba',
-          300: '#7fb069',
-          400: '#6b8e5a',
-          500: '#5a7c4a',
-          600: '#4a6741',
-          700: '#3d5535',
-          800: '#2f4229',
-          900: '#1f2c1b',
+          50: '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3d0',
+          300: '#6ee7b7',
+          400: '#34d399',
+          500: '#10b981', // Emerald Green - Primary
+          600: '#059669',
+          700: '#047857',
+          800: '#065f46',
+          900: '#064e3b',
+        },
+        secondary: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#1e40af', // Navy Blue - Secondary
+          700: '#1e3a8a',
+          800: '#1e3a8a',
+          900: '#1e3a8a',
+        },
+        accent: {
+          50: '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          300: '#fcd34d',
+          400: '#fbbf24',
+          500: '#f59e0b', // Gold - Accent
+          600: '#d97706',
+          700: '#b45309',
+          800: '#92400e',
+          900: '#78350f',
         },
         matcha: {
-          light: '#c8e6d3',
-          base: '#7fb069',
-          dark: '#4a6741',
-          deep: '#2f4229',
+          light: '#ecfdf5',
+          base: '#10b981',
+          dark: '#059669',
+          deep: '#047857',
         },
         genx: {
           cream: '#f5f1e8',
@@ -38,8 +62,8 @@ module.exports = {
         display: ['var(--font-poppins)', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'genx': '6px 6px 0px 0px rgba(26, 45, 23, 0.3)',
-        'genx-lg': '8px 8px 0px 0px rgba(26, 45, 23, 0.35)',
+        'genx': '6px 6px 0px 0px rgba(6, 95, 70, 0.3)',
+        'genx-lg': '8px 8px 0px 0px rgba(6, 95, 70, 0.35)',
       },
       backdropBlur: {
         xs: '2px',
